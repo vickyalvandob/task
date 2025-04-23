@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Project;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class ProjectController extends Controller
 {
@@ -12,7 +13,14 @@ class ProjectController extends Controller
      */
     public function index()
     {
-        //
+        $projects = Project::where('user_id', auth()->id())->with('tasks')->get();
+        return Inertia::render('projects/index', [
+            'projects' => $projects,
+            'flash' => [
+                'success' => session('success'),
+                'error' => session('error')
+            ]
+        ]);
     }
 
     /**
@@ -28,7 +36,17 @@ class ProjectController extends Controller
      */
     public function store(Request $request)
     {
-        //
+       $validated = $request->validate([
+        'title' => 'required|string|max:255',
+        'description' => 'nullable|string',
+       ]);
+
+       Project::create([
+        ...$validated,
+        'user_id' => auth()->id()
+       ]);
+
+       return redirect()->route('projects.index')->with('success', 'Project created successfully');
     }
 
     /**
@@ -52,7 +70,13 @@ class ProjectController extends Controller
      */
     public function update(Request $request, Project $project)
     {
-        //
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string',
+        ]);
+
+       $project->update($validated);
+        return redirect()->route('projects.index')->with('success', 'Project updated successfully');
     }
 
     /**
@@ -60,6 +84,7 @@ class ProjectController extends Controller
      */
     public function destroy(Project $project)
     {
-        //
+      $project->delete();
+      return redirect()->route('projects.index')->with('success', 'Project deleted successfully');
     }
 }
