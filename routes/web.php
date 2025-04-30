@@ -3,6 +3,7 @@
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\TaskController;
 
 Route::get('/', function () {
     return Inertia::render('welcome');
@@ -11,6 +12,7 @@ Route::get('/', function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     
     Route::resource('projects', ProjectController::class);
+    Route::resource('tasks', TaskController::class);
     Route::get('dashboard', function () {
         return Inertia::render('dashboard');
     })->name('dashboard');
