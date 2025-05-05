@@ -1,6 +1,6 @@
 // resources/js/Pages/tasks/Index.tsx
 
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, router, Link } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import {
   Plus,
@@ -12,16 +12,22 @@ import {
   List,
   CheckCircle,
   Search,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { useState, useEffect } from 'react';
 import {
   Dialog,
+  DialogTrigger,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
+  DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,10 +35,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { useForm } from '@inertiajs/react';
 import {
   Select,
-  SelectContent,
-  SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectContent,
+  SelectItem,
 } from '@/components/ui/select';
 
 interface Task {
@@ -42,10 +48,7 @@ interface Task {
   is_completed: boolean;
   due_date: string | null;
   project_id: number;
-  project: {
-    id: number;
-    title: string;
-  };
+  project: { id: number; title: string };
 }
 
 interface Project {
@@ -53,32 +56,18 @@ interface Project {
   title: string;
 }
 
-interface PaginationLink {
-  url: string | null;
-  label: string;
-  active: boolean;
-}
-
 interface Props {
   tasks: {
     data: Task[];
-    links: PaginationLink[];
     current_page: number;
     last_page: number;
-    per_page: number;
     total: number;
     from: number;
     to: number;
   };
   projects: Project[];
-  filters: {
-    search: string;
-    filter: 'all' | 'completed' | 'pending';
-  };
-  flash?: {
-    success?: string;
-    error?: string;
-  };
+  filters: { search: string; filter: 'all' | 'completed' | 'pending' };
+  flash?: { success?: string; error?: string };
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -87,14 +76,14 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 export default function TasksIndex({ tasks, projects, filters, flash }: Props) {
   const [isOpen, setIsOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [deleteTaskId, setDeleteTaskId] = useState<number | null>(null);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
   const [searchTerm, setSearchTerm] = useState(filters.search);
-  const [completionFilter, setCompletionFilter] = useState<
-    'all' | 'completed' | 'pending'
-  >(filters.filter);
+  const [completionFilter, setCompletionFilter] = useState(filters.filter);
 
   useEffect(() => {
     if (flash?.success) {
@@ -126,25 +115,17 @@ export default function TasksIndex({ tasks, projects, filters, flash }: Props) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-
-    if (editingTask) {
-      put(route('tasks.update', editingTask.id), {
-        onSuccess: () => {
-          setIsOpen(false);
-          reset();
-          setEditingTask(null);
-          // redirect from server will re-fetch index
-        },
-      });
-    } else {
-      post(route('tasks.store'), {
-        onSuccess: () => {
-          setIsOpen(false);
-          reset();
-          // redirect from server will re-fetch index
-        },
-      });
-    }
+    const action = editingTask ? put : post;
+    const url = editingTask
+      ? route('tasks.update', editingTask.id)
+      : route('tasks.store');
+    action(url, {
+      onSuccess: () => {
+        setIsOpen(false);
+        reset();
+        setEditingTask(null);
+      },
+    });
   }
 
   function handleEdit(task: Task) {
@@ -159,67 +140,76 @@ export default function TasksIndex({ tasks, projects, filters, flash }: Props) {
     setIsOpen(true);
   }
 
-  function handleDelete(id: number) {
-    destroy(route('tasks.destroy', id));
-    // server redirect will re-fetch index
+  function confirmDelete(id: number) {
+    setDeleteTaskId(id);
+    setDeleteOpen(true);
+  }
+
+  function handleDelete() {
+    if (deleteTaskId) destroy(route('tasks.destroy', deleteTaskId));
+    setDeleteOpen(false);
+  }
+
+  function applyFilters(params: { page?: number }) {
+    router.get(
+      route('tasks.index'),
+      { search: searchTerm, filter: completionFilter, ...params },
+      { preserveState: true }
+    );
   }
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    router.get(
-      route('tasks.index'),
-      { search: searchTerm, filter: completionFilter },
-      { preserveScroll: true }
-    );
+    applyFilters({ page: 1 });
   }
 
   function handleFilterChange(value: 'all' | 'completed' | 'pending') {
     setCompletionFilter(value);
-    router.get(
-      route('tasks.index'),
-      { search: searchTerm, filter: value },
-      { preserveScroll: true }
-    );
+    applyFilters({ page: 1 });
   }
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Tasks" />
 
-      {/* Toast */}
       {showToast && (
         <div
-          className={`fixed top-4 right-4 z-50 flex items-center gap-2 rounded-lg p-4 shadow-lg ${
+          className={`fixed top-4 right-4 flex items-center gap-2 p-4 rounded shadow-lg text-white ${
             toastType === 'success' ? 'bg-green-500' : 'bg-red-500'
-          } text-white`}
+          }`}
         >
           {toastType === 'success' ? (
-            <CheckCircle2 className="h-5 w-5" />
+            <CheckCircle2 className="w-5 h-5" />
           ) : (
-            <XCircle className="h-5 w-5" />
+            <XCircle className="w-5 h-5" />
           )}
           <span>{toastMessage}</span>
         </div>
       )}
 
-      <div className="flex h-full flex-1 flex-col gap-6 rounded-xl p-6 bg-gradient-to-br from-background to-muted/20">
-        <div className="flex justify-between items-center">
+      <div className="flex flex-col flex-1 h-full gap-6 p-6 bg-gradient-to-br from-background to-muted/20 rounded-xl">
+        <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Tasks</h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="mt-1 text-muted-foreground">
               Manage your tasks and stay organized
             </p>
           </div>
 
           <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
+              <Button
+                onClick={() => {
+                  setEditingTask(null);
+                  reset();
+                }}
+              >
+                <Plus className="w-4 h-4" />
                 New Task
               </Button>
             </DialogTrigger>
 
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-sm">
               <DialogHeader>
                 <DialogTitle>
                   {editingTask ? 'Edit Task' : 'Create New Task'}
@@ -284,23 +274,44 @@ export default function TasksIndex({ tasks, projects, filters, flash }: Props) {
                     type="checkbox"
                     checked={data.is_completed}
                     onChange={(e) => setData('is_completed', e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 focus:ring-2 focus:ring-primary"
+                    className="w-4 h-4 rounded border-gray-300 focus:ring-2 focus:ring-primary"
                   />
                   <Label htmlFor="is_completed">Completed</Label>
                 </div>
 
-                <Button type="submit" disabled={processing} className="w-full">
-                  {editingTask ? 'Update' : 'Create'}
-                </Button>
+                <DialogFooter>
+                  <Button type="submit" disabled={processing} className="w-full">
+                    {editingTask ? 'Update' : 'Create'}
+                  </Button>
+                </DialogFooter>
               </form>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Delete Task</DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to delete this task?
+                </DialogDescription>
+              </DialogHeader>
+
+              <DialogFooter className="space-x-2">
+                <Button variant="ghost" onClick={() => setDeleteOpen(false)}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={handleDelete}>
+                  Delete
+                </Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
 
-        {/* Search & Filter */}
         <div className="flex gap-4 mb-4">
           <form onSubmit={handleSearch} className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute w-4 h-4 left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search tasks..."
               value={searchTerm}
@@ -310,7 +321,7 @@ export default function TasksIndex({ tasks, projects, filters, flash }: Props) {
           </form>
 
           <Select value={completionFilter} onValueChange={handleFilterChange}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-44">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
@@ -321,106 +332,105 @@ export default function TasksIndex({ tasks, projects, filters, flash }: Props) {
           </Select>
         </div>
 
-        {/* Table */}
-        <div className="rounded-md border">
-          <div className="relative w-full overflow-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="px-4 py-2 text-left">Title</th>
-                  <th className="px-4 py-2 text-left">Description</th>
-                  <th className="px-4 py-2 text-left">Project</th>
-                  <th className="px-4 py-2 text-left">Due Date</th>
-                  <th className="px-4 py-2 text-left">Status</th>
-                  <th className="px-4 py-2 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tasks.data.map((task) => (
+        <div className="overflow-auto border rounded-md">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/20 border-b">
+                <th className="px-4 py-2 text-left">Title</th>
+                <th className="px-4 py-2 text-left">Description</th>
+                <th className="px-4 py-2 text-left">Project</th>
+                <th className="px-4 py-2 text-left">Due Date</th>
+                <th className="px-4 py-2 text-left">Status</th>
+                <th className="px-4 py-2 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tasks.data.length > 0 ? (
+                tasks.data.map((task) => (
                   <tr key={task.id} className="border-b hover:bg-muted/50">
-                    <td className="p-4 font-medium">{task.title}</td>
-                    <td className="p-4 max-w-[200px] truncate">
-                      {task.description ?? 'No description'}
+                    <td className="px-4 py-2 font-medium">{task.title}</td>
+                    <td className="px-4 py-2 max-w-xs truncate">{task.description || 'No description'}</td>
+                    <td className="px-4 py-2 flex items-center gap-2">
+                      <List className="w-4 h-4 text-muted-foreground" />{task.project.title}
                     </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-2">
-                        <List className="h-4 w-4 text-muted-foreground" />
-                        {task.project.title}
-                      </div>
-                    </td>
-                    <td className="p-4">
+                    <td className="px-4 py-2">
                       {task.due_date ? (
                         <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <Calendar className="w-4 h-4 text-muted-foreground" />
                           {new Date(task.due_date).toLocaleDateString()}
                         </div>
                       ) : (
                         <span className="text-muted-foreground">No due date</span>
                       )}
                     </td>
-                    <td className="p-4">
+                    <td className="px-4 py-2">
                       {task.is_completed ? (
                         <div className="flex items-center gap-2 text-green-500">
-                          <CheckCircle className="h-4 w-4" />
-                          Completed
+                          <CheckCircle className="w-4 h-4" />Completed
                         </div>
                       ) : (
                         <div className="text-yellow-500">Pending</div>
                       )}
                     </td>
-                    <td className="p-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEdit(task)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(task.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                    <td className="px-4 py-2 text-right flex justify-end gap-2">
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(task)}>
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => confirmDelete(task.id)}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </td>
                   </tr>
-                ))}
-                {tasks.data.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="p-4 text-center text-muted-foreground">
-                      No tasks found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="px-4 py-2 text-center text-muted-foreground">
+                    No tasks found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
 
-        {/* Pagination */}
-        <div className="flex items-center justify-between px-2">
-          <div className="text-sm text-muted-foreground">
+        <div className="flex items-center justify-between px-4 py-2">
+          <span className="text-sm text-muted-foreground">
             Showing {tasks.from} to {tasks.to} of {tasks.total} results
+          </span>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={tasks.current_page === 1}
+              onClick={() => applyFilters({ page: 1 })}
+            >
+              <ChevronsLeft className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={tasks.current_page === 1}
+              onClick={() => applyFilters({ page: tasks.current_page - 1 })}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={tasks.current_page === tasks.last_page}
+              onClick={() => applyFilters({ page: tasks.current_page + 1 })}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              disabled={tasks.current_page === tasks.last_page}
+              onClick={() => applyFilters({ page: tasks.last_page })}
+            >
+              <ChevronsRight className="w-4 h-4" />
+            </Button>
           </div>
-
-          <nav className="flex items-center space-x-2">
-            {tasks.links.map((link, i) => (
-              <Link
-                key={i}
-                href={link.url || '#'}
-                preserveScroll
-                className={`px-3 py-1 rounded ${
-                  link.active
-                    ? 'bg-primary text-white'
-                    : 'border border-gray-200 text-gray-500'
-                }`}
-                dangerouslySetInnerHTML={{ __html: link.label }}
-              />
-            ))}
-          </nav>
         </div>
       </div>
     </AppLayout>

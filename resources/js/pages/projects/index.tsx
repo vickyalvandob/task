@@ -1,5 +1,3 @@
-// resources/js/Pages/projects/Index.tsx
-
 import { Head } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -46,6 +44,10 @@ export default function ProjectsIndex({ projects, flash }: Props) {
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
 
+  // delete confirmation state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+
   // show flash
   useEffect(() => {
     if (flash?.success) {
@@ -82,7 +84,6 @@ export default function ProjectsIndex({ projects, flash }: Props) {
       put(route('projects.update', editingProject.id), {
         onSuccess: () => {
           setIsOpen(false);
-          // controller does redirect→index, Inertia fetches fresh list
         },
       });
     } else {
@@ -103,9 +104,20 @@ export default function ProjectsIndex({ projects, flash }: Props) {
     setIsOpen(true);
   };
 
-  // delete project
-  const handleDelete = (id: number) => {
-    destroy(route('projects.destroy', id));
+  // open delete confirmation
+  const handleDeleteClick = (project: Project) => {
+    setProjectToDelete(project);
+    setDeleteDialogOpen(true);
+  };
+
+  // perform delete
+  const handleConfirmDelete = () => {
+    if (!projectToDelete) return;
+    destroy(route('projects.destroy', projectToDelete.id), {
+      onSuccess: () => {
+        setDeleteDialogOpen(false);
+      },
+    });
   };
 
   return (
@@ -136,7 +148,6 @@ export default function ProjectsIndex({ projects, flash }: Props) {
             open={isOpen}
             onOpenChange={(open) => {
               setIsOpen(open);
-              // whenever the dialog closes, clear form + editing state
               if (!open) {
                 reset();
                 setEditingProject(null);
@@ -146,7 +157,6 @@ export default function ProjectsIndex({ projects, flash }: Props) {
             <DialogTrigger asChild>
               <Button
                 onClick={() => {
-                  // ensure fresh form when clicking "New"
                   reset();
                   setEditingProject(null);
                 }}
@@ -213,7 +223,7 @@ export default function ProjectsIndex({ projects, flash }: Props) {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => handleDelete(project.id)}
+                    onClick={() => handleDeleteClick(project)}
                     className="text-destructive hover:text-destructive/90"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -234,6 +244,32 @@ export default function ProjectsIndex({ projects, flash }: Props) {
             </Card>
           ))}
         </div>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog
+          open={deleteDialogOpen}
+          onOpenChange={(open) => {
+            setDeleteDialogOpen(open);
+            if (!open) setProjectToDelete(null);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete Project</DialogTitle>
+            </DialogHeader>
+            <p className="py-2">
+              Are you sure you want to delete the project "{projectToDelete?.title}"? This action cannot be undone.
+            </p>
+            <div className="flex justify-end mt-4 space-x-2">
+              <Button variant="ghost" onClick={() => setDeleteDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleConfirmDelete}>
+                Delete
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );
